@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use File::Copy;
+
+use constant {
+	NUMBER_DIR => '#',
+	SYMBOL_DIR => '_'
+};
+
+# uses current directory if no argument given
+sort_directory(@ARGV ? @ARGV : '.');
+
+sub sort_directory {
+	my $old_dir = shift;
+
+	-d $old_dir
+		or die "Invalid directory: $old_dir";
+
+	opendir(my $handle, $old_dir) or die $!;
+	# skips directories and hidden files
+	my @files = grep {!-d $_ && /^[^.]/} readdir($handle);
+	closedir($handle);
+
+	for my $file_name (@files) {
+		my $sub_dir_name = uc substr($file_name, 0, 1);
+
+		if ($sub_dir_name =~ /\d/) {
+			$sub_dir_name = NUMBER_DIR;
+		} elsif ($sub_dir_name !~ /[A-Z]/) {
+			$sub_dir_name = SYMBOL_DIR;
+		}
+
+		my $new_dir = join('/', $old_dir, $sub_dir_name);
+
+		if (!-d $new_dir) {
+			mkdir $new_dir;
+		}
+
+		my $old_file_path = join('/', $old_dir, $file_name);
+		my $new_file_path = join('/', $new_dir, $file_name);
+
+		move($old_file_path, $new_file_path);
+	}
+}

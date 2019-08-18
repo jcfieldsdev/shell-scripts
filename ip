@@ -1,0 +1,51 @@
+#!/usr/bin/env tclsh
+
+package require http
+
+proc main {} {
+	if [catch {set local [get_local_ip]}] {
+		set local Error
+	}
+
+	if [catch {set remote [get_remote_ip]}] {
+		set remote Error
+	}
+
+	puts "Local:  $local"
+	puts "Remote: $remote"
+}
+
+proc get_local_ip {} {
+	# picks random port
+	set port [expr {int(1024 + rand() * (65535 - 1024))}]
+
+	set tss [socket -server tserv $port]
+	set ts2 [socket [info hostname] $port]
+	set ip [lindex [fconfigure $ts2 -sockname] 0]
+
+	close $tss
+	close $ts2
+
+	return [format_ip $ip]
+}
+
+proc get_remote_ip {} {
+	set url http://checkip.amazonaws.com/
+
+	set http [::http::geturl $url]
+	set ip [::http::data $http]
+
+	return [format_ip [string trim $ip]]
+}
+
+proc format_ip {ip} {
+	set bytes {}
+
+	foreach byte [split $ip .] {
+		lappend bytes [format %3s $byte]
+	}
+
+	return [join $bytes { . }]
+}
+
+main

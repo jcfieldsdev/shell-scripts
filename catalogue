@@ -1,0 +1,289 @@
+#!/usr/bin/perl
+################################################################################
+# Catalogue-o-matic                                                            #
+#                                                                              #
+# Generates a pretty XHTML summary of one's digital music collection.          #
+#                                                                              #
+# Sample formats:                                                              #
+#   ./Beatles, The/1969-Abbey Road/                                            #
+#   ./Dire Straits/Brothers in Arms/                                           #
+#   ./Pearl Jam/2000-10-20-Albuquerque/                                        #
+#   ./REM/1992 - Automatic for the People/                                     #
+################################################################################
+
+use strict;
+use warnings;
+
+use constant {
+	CONFIG_FILE  => 'catalogue.conf',
+	DEFAULT_DIR  => '.',
+	DEFAULT_FILE => 'catalogue.html'
+};
+
+################################################################################
+# Read/write config file                                                       #
+################################################################################
+
+my ($dir, $file, $input);
+
+if (open CONFIG, '<', CONFIG_FILE) {
+	while (<CONFIG>) {
+		chomp;
+
+		# gets rest of the line after pattern
+		$dir = $' if (/^dir=/);
+		$file = $' if (/^file=/);
+	}
+
+	close CONFIG;
+}
+
+$dir = DEFAULT_DIR unless ($dir);
+$file = DEFAULT_FILE unless ($file);
+
+print "Directory to scan ($dir): ";
+chomp($input = <STDIN>);
+# preserves default value or config file value if input is blank
+$input = $dir unless ($input);
+$dir = $input;
+
+print "File to write ($file): ";
+chomp($input = <STDIN>);
+$input = $file unless ($input);
+$file = $input;
+
+# writes config file if values changed from defaults
+if ($dir ne DEFAULT_DIR || $file ne DEFAULT_FILE) {
+	open my $handle, '>', CONFIG_FILE
+		or die $!;
+
+	print $handle "[catalogue.pl]\ndir=$dir\nfile=$file\n";
+	close $handle;
+} elsif (-f CONFIG_FILE) { # deletes config file if values are same as defaults
+	unlink CONFIG_FILE;
+}
+
+################################################################################
+# Scan directories                                                             #
+################################################################################
+
+my @months = qw{
+	January February March
+	April   May      June
+	July    August   September
+	October November December
+};
+
+print "\nScanning...";
+
+opendir ARTISTS, $dir
+	or die qq{Could not open directory "$dir": $!};
+
+my @artists = grep {-d "$dir/$_" && !/^\./} readdir ARTISTS;
+@artists = sort @artists;
+
+my $catalogue = '';
+
+for my $artist (@artists) {
+	opendir ALBUMS, "$dir/$artist"
+		or die qq{Could not open directory "$dir/$artist": $!};
+
+	my $fmt_artist = $artist;
+	# highlights sort character
+	$fmt_artist =~ s|^(\w)|<span class="initial">$1</span>|g;
+	# encodes ampersands
+	$fmt_artist =~ s/&/&amp;/g;
+	# handles ", The" and similar
+	$fmt_artist = "$2 $1" if ($fmt_artist =~ /^([\w\/<>"=&; ]+), (\w+)$/);
+
+	$catalogue .= qq{\n<ul><li><span class="artist">$fmt_artist</span>\n\t<ul>};
+
+	my @albums = grep {-d "$dir/$artist/$_" && !/^\./} readdir ALBUMS;
+	@albums = sort @albums;
+
+	for my $album (@albums) {
+		if ($album =~ /^((\d{4})?[-_ ]*)(.*)$/) {
+			my $year = $2 || '';
+			my $title = $3 || '';
+
+			if ($title) { # checks if album has title
+				if ($year && $title =~ /(\d{2})[-_ ]+(\d{2})[-_, ]+(.*)/) {
+					my ($ordinal, $lastchar) = ('th', substr($2, -1));
+					my $month = (int $1) - 1;
+					my $day = int $2;
+					my $city = $3;
+
+					if ($lastchar eq '1') { # handles ordinals
+						$ordinal = 'st' unless ($2 eq '11');
+					} elsif ($lastchar eq '2') {
+						$ordinal = 'nd' unless ($2 eq '12');
+					} elsif ($lastchar eq '3') {
+						$ordinal = 'rd' unless ($2 eq '13');
+					}
+
+					$city =~ s|\[([-\w !]+)]|<span class="tag">$1</span>|g;
+					$album = qq{<span class="note">bootleg:</span> $city; };
+
+					if ($month <= $#months) {
+						$album .= qq{$months[$month] $day<sup>$ordinal</sup>};
+					}
+				} else {
+					my $fmt_album = $3;
+					$fmt_album =~ s/&/&amp;/g;
+					$fmt_album =~ s|\[([-\w !]+)]|<span class="tag">$1</span>|g;
+
+					# moves "A," "An," and "The" to beginning
+					if ($fmt_album =~ /^([\w '=&]+), (An?|The)$/) {
+						$fmt_album = "$2 $1";
+					}
+
+					$album = qq{<span class="title">$fmt_album</span>};
+				}
+			} else {
+				$album = qq{<span class="note">eponymous</span>};
+			}
+
+			$album .= qq{ (<span class="year">$year</span>)} if ($year);
+		} else {
+			$album = qq{<span class="title">$album</span>};
+		}
+
+		$catalogue .= "\n\t\t<li>$album</li>";
+	}
+
+	$catalogue .= qq{\n\t</ul>};
+	$catalogue .= qq{\n\t<ul><li class="end"><a href="#top">top</a></li></ul>};
+	$catalogue .= qq{\n</li></ul>};
+
+	close ALBUMS;
+}
+
+close ARTISTS;
+
+################################################################################
+# Prints everything                                                            #
+################################################################################
+
+open CATALOGUE, '>', $file
+	or die $!;
+
+print "\nWriting...\n";
+
+my @color1 = qw{80c0a0 80a0c0 c0a080 c080a0 a080c0 a0c080};
+my @color2 = qw{80ffc0 80c0ff ffc080 ff80c0 c080ff c0ff80};
+my $rand = int rand @color1; # randomizes color scheme
+
+print CATALOGUE<<"XML";
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head><title>Music Catalogue</title>
+<style media="screen" type="text/css">
+a {
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+a, li.year:first-line {
+	background: none;
+	color: #$color1[$rand];
+}
+
+a:active, a:hover {
+	background: none;
+	color: #$color2[$rand];
+}
+
+dd, li.end, span.tag, sup {
+	font-size: x-small;
+}
+
+dl, dt {
+	clear: left;
+}
+
+dt, ul.years {
+	float: left;
+}
+
+h1 {
+	border-bottom: 2px solid #$color1[$rand];
+	font-size: x-large;
+	font-weight: normal;
+	text-align: right;
+}
+
+h1, span.title {
+	font-style: italic;
+}
+
+li.year:first-line, span.initial, span.tag {
+	font-weight: bold;
+}
+
+html {
+	background: #333;
+	color: #fff;
+	font: 12px/150% Georgia, "Times New Roman", serif;
+}
+
+li.end, ul.years li {
+	list-style: none;
+}
+
+span.note {
+	font-variant: small-caps;
+}
+
+span.tag {
+	background: #$color1[$rand];
+	color: #333;
+	cursor: help;
+	display: inline-block;
+	font-family: Verdana, Helvetica, sans-serif;
+	height: 1.5em;
+	min-width: 1em;
+	text-align: center;
+}
+
+ul.years a {
+	border-left: 2px solid #$color1[$rand];
+	padding-left: 2px;
+}
+
+ul.years a:active, ul.years a:hover {
+	border-color: #$color2[$rand];
+}</style></head>
+<body><h1 id="top">Music Catalogue</h1>
+<dl><dt><span class="tag" title="single">A</span></dt>
+<dd>single</dd>
+<dt><span class="tag" title="box set">B</span></dt>
+<dd>box set</dd>
+<dt><span class="tag" title="compilation album">C</span></dt>
+<dd>compilation album</dd>
+<dt><span class="tag" title="DVD (or other digital video) source">D</span></dt>
+<dd>DVD (or other video) source</dd>
+<dt><span class="tag" title="extended-play single">E</span></dt>
+<dd>extended-play single</dd>
+<dt><span class="tag" title="video game soundtrack">G</span></dt>
+<dd>video game soundtrack album</dd>
+<dt><span class="tag" title="illegitimate release">I</span></dt>
+<dd>illegitimate release</dd>
+<dt><span class="tag" title="live album">L</span></dt>
+<dd>live album</dd>
+<dt><span class="tag" title="promotional single">P</span></dt>
+<dd>promotional single</dd>
+<dt><span class="tag" title="remaster/reissue">R</span></dt>
+<dd>remaster/reissue</dd>
+<dt><span class="tag" title="soundtrack album">S</span></dt>
+<dd>movie soundtrack album</dd>
+<dt><span class="tag" title="vinyl (or other analogue audio) source">V</span></dt>
+<dd>vinyl (or other analogue audio) source</dd>
+<dt><span class="tag" title="edited/censored content">X</span></dt>
+<dd>edited/censored content</dd>
+<dt><span class="tag" title="damaged source">!</span></dt>
+<dd>damaged source</dd></dl>$catalogue</body></html>
+XML
+
+close CATALOGUE;
+
+print "\nFinished.\n";

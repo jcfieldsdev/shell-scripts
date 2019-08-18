@@ -1,0 +1,5 @@
+#!/bin/sh
+
+find . -name *.DS_Store -type f -exec rm {} \;
+folder=${PWD##*/}
+zip -r $folder.zip .

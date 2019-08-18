@@ -1,0 +1,13 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+# renames all files and folders if no argument
+rename_files(@ARGV ? @ARGV : glob '*');
+
+sub rename_files {
+	for (@_) {
+		rename $_, lc unless (/\s/); # skips files with spaces in the name
+	}
+}

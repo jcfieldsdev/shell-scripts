@@ -1,0 +1,42 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use File::Basename;
+
+use constant EXCLUDED_EXTENSIONS => qw(.zip .bz2 .gz .7z .rar);
+
+# zips all files and folders if no argument
+zip_files(@ARGV ? @ARGV : glob '*');
+
+sub zip_files {
+	for (@_) {
+		# skips directories
+		next if (-d $_);
+
+		my ($file_name, $dir_name, $suffix) = fileparse($_, qr/\.\w+$/);
+		my $zipped_file_name = $file_name;
+
+		if (length $suffix > 0) {
+			next if (grep {/$suffix$/} EXCLUDED_EXTENSIONS);
+
+			# replaces extension
+			$zipped_file_name =~ s/$suffix$/.zip/g;
+		} else {
+			# adds extension for files with no extension
+			$zipped_file_name .= '.zip';
+		}
+
+		my $path = $dir_name . $zipped_file_name;
+
+		# checks if file name already exists
+		next if (-e $path);
+
+		# checks if file zipped successfully
+		next if (system('zip', $path, $_) != 0);
+
+		# removes original file
+		unlink;
+	}
+}

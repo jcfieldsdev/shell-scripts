@@ -1,0 +1,88 @@
+#!/usr/bin/env tclsh
+
+proc main {} {
+	set flag Gray
+
+	if {$::argc > 0} {
+		set root [lindex $::argv 0]
+	} else {
+		set root [pwd]
+	}
+
+	foreach dir [glob -nocomplain -directory $root -type d *] {
+		if {![file exists $dir/.git]} {
+			continue
+		}
+
+		set tags [read_tags $dir]
+
+		if {[exec git -C $dir status --porcelain] ne {}} {
+			set tags [add_tag $flag $tags]
+		} else {
+			set tags [remove_tag $flag $tags]
+		}
+
+		write_tags $dir $tags
+	}
+}
+
+proc read_tags path {
+	set output [exec mdls -raw -name kMDItemUserTags $path]
+	set output [string trim [string range $output 1 end-1]]
+	set output [regsub -all {\n\s+} $output {}]
+
+	set tags {}
+
+	foreach tag [split $output {,}] {
+		if {$tag eq {null}} {
+			continue
+		}
+
+		# removes quotes if present (when tag contains spaces)
+		regsub -all ^"(.+)"$ $tag {\1} tag
+
+		# escapes XML special characters in tag name
+		set tag [string map {& &amp;} $tag]
+		set tag [string map {< &lt;} $tag]
+		set tag [string map {> &gt;} $tag]
+		set tag [string map {' &apos;} $tag]
+		set tag [string map {\\\" &quot;} $tag]
+
+		lappend tags $tag
+	}
+
+	return $tags
+}
+
+proc write_tags {path tags} {
+	if {[llength $tags] == 0} {
+		# must remove both properties, FinderInfo stores legacy color labels
+		catch {exec xattr -d com.apple.metadata:_kMDItemUserTags $path}
+		catch {exec xattr -d com.apple.FinderInfo $path}
+		return
+	}
+
+	set strings [join $tags {</string><string>}]
+	set plist "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\"\
+		\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist\
+		version=\"1.0\"><array><string>$strings</string></array></plist>"
+	set command "xattr -w com.apple.metadata:_kMDItemUserTags '$plist' $path"
+
+	# must run command from shell or initial angle bracket of plist causes grief
+	exec /bin/sh -c $command
+}
+
+proc add_tag {flag tags} {
+	if {[lsearch $tags $flag] == -1} {
+		lappend tags $flag
+	}
+
+	return $tags
+}
+
+proc remove_tag {flag tags} {
+	set index [lsearch $tags $flag]
+	return [lreplace $tags $index $index]
+}
+
+main

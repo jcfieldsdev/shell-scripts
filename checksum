@@ -1,0 +1,38 @@
+#!/usr/bin/env php
+<?php
+
+if ($argc > 1) {
+	$files = $argv;
+	array_shift($files);
+} else {
+	$files = scandir('.');
+}
+
+$max = 0;
+
+foreach ($files as $file) { // finds longest file name
+	if (!is_file($file)) {
+		continue;
+	}
+
+	$max = max($max, strlen($file));
+}
+
+$max = min($max, 36); // limits max so line will not exceed console width
+
+foreach ($files as $file) {
+	if (!is_file($file)) {
+		continue;
+	}
+
+	// truncates file name with ellipsis if it would cause row to overflow width
+	$file = strlen($file) > $max ? substr($file, 0, $max - 3) . '...' : $file;
+	$contents = file_get_contents($file);
+
+	printf(
+		"%s  %8x  %s\n",
+		str_pad($file, $max),
+		crc32($contents),
+		md5($contents)
+	);
+}

@@ -1,0 +1,75 @@
+#!/usr/bin/env tclsh
+
+proc main {} {
+	set root /var/log/apache2
+	set filters {*.log *_log}
+
+	if {![file exists $root] || ![file isdir $root]} {
+		puts {Invalid directory.}
+		exit 1
+	}
+
+	set logs [get_logs $root $filters]
+	print_logs $logs
+
+	if {[llength $logs] == 0} {
+		puts {No log files in directory.}
+		exit 1
+	}
+
+	set selection [get_selection $logs]
+
+	puts {}
+
+	set log [lindex $logs $selection]
+	waitpid [exec tail -f $root/$log &]
+}
+
+proc get_logs {root filters} {
+	set logs {}
+
+	foreach filter $filters {
+		lappend logs {*}[glob -nocomplain $root/$filter]
+	}
+
+	return [lsort [lmap log $logs {file tail $log}]]
+}
+
+proc print_logs {logs} {
+	set i 0
+
+	foreach log $logs {
+		puts "\[$i] $log"
+		incr i
+	}
+}
+
+proc get_selection {logs} {
+	set selection 0
+
+	while 1 {
+		puts "\nSelect log file: "
+		gets stdin selection
+
+		if {[string is integer $selection] && $selection < [llength $logs]} {
+			break
+		} else {
+			puts {Invalid selection.}
+		}
+	}
+
+	return $selection
+}
+
+proc waitpid {pid} {
+	set rc [catch {exec -- kill -0 $pid}]
+
+	while {$rc == 0} {
+		set waitflag 0
+		after 100 [list set waitflag 1]
+		vwait waitflag
+		set rc [catch {exec -- kill -0 $pid}]
+	}
+}
+
+main

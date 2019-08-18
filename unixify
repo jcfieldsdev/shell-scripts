@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+# scans current working directory if no arguments given
+convert_files(@ARGV ? @ARGV : read_directory('.'));
+
+sub read_directory {
+	my ($dir) = @_;
+
+	# reads directory
+	opendir my $handle, $dir
+		or die qq{Could not open directory "$dir":\n$!};
+	my @files = grep {/\.((c|h)(hh|xx)?|cgi|css|ht(access|passwd)|[prsx]?html?
+		|inc|ini|js|log|pl|php\d?|py|rb|rdf|tcl|txt|x(ml|sl))$
+		/x} readdir $handle;
+	closedir $handle;
+
+	return @files;
+}
+
+sub convert_files {
+	local $/; # loads entire file as scalar
+
+	for (@_) {
+		my ($old_text, $new_text);
+
+		open my $handle, '<', $_
+			or die qq{Could not read file "$_":\n$!};
+		$old_text = <$handle>;
+		close $handle;
+
+		($new_text = $old_text) =~ s/\x0d\x0a/\x0a/gm; # converts line breaks
+
+		# only rewrites file if changed
+		next if ($old_text eq $new_text);
+
+		open $handle, '>', $_
+			or die qq{Could not write file "$_":\n$!};
+		binmode $handle;
+		print $handle $new_text;
+		close $handle;
+
+		print "$_\n";
+	}
+}

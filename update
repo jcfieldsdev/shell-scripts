@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+port selfupdate
+port upgrade outdated
+port uninstall inactive
+
+while true; do
+	# exits with non-zero status (and breaks loop) when no leaves found
+	port uninstall leaves
+done

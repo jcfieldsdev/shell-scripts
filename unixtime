@@ -1,0 +1,14 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use POSIX qw(strftime);
+
+my $time = $ARGV[0] || time;
+
+printf(
+	"%d: %s\n",
+	$time,
+	strftime('%a, %d %b %Y %T +0000', localtime $time)
+);

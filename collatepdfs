@@ -1,0 +1,7 @@
+#!/bin/sh
+
+pdftk back.pdf cat end-1 output back2.pdf
+
+if pdftk A=front.pdf B=back2.pdf shuffle A B output merged.pdf; then
+	rm front.pdf back.pdf back2.pdf
+fi

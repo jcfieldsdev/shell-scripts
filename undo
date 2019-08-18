@@ -1,0 +1,10 @@
+#!/usr/bin/osascript
+
+tell application "System Events" to tell process "Finder"
+	set frontmost to true
+	tell menu bar item "Go" of menu bar 1
+		tell menu item "Recent Folders" of menu 1
+			click menu item 1 of menu 1
+		end tell
+	end tell
+end tell

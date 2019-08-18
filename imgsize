@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+
+from PIL import Image
+
+def main():
+	files = sys.argv[1:]
+
+	if len(files) == 0: # gets all files in directory if no arguments given
+		files = [f for f in os.listdir('.') if os.path.isfile(f)]
+
+	images = []
+	longest = 0
+
+	for file in sorted(files):
+		width, height = get_image_size(file)
+
+		if width and height:
+			length = len(file)
+			longest = max(length, longest)
+
+			if width > 0 and height > 0:
+				images.append((file, width, height))
+
+	for image in images:
+		file, width, height = image
+
+		print('{}: {:>4} × {:>4}'.format(file.rjust(longest), width, height))
+
+def get_image_size(file):
+	try:
+		img = Image.open(file)
+		return img.size
+	except:
+		return 0, 0
+
+if __name__ == '__main__':
+	main()

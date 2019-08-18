@@ -1,0 +1,115 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use constant {
+	TIMES_FILE => '.times'
+};
+
+my (@output, $arg);
+
+$arg = $ARGV[0] || '';
+
+if ($arg =~ m|^[-/]?c$|) {
+	@output = read_ctimes();
+} elsif ($arg =~ m|^[-/]?d$|) {
+	@output = read_mtimes();
+} elsif ($arg =~ m|^[-/]?g$|) {
+	@output = get_timestamps();
+} elsif ($arg =~ m|^[-/]?s$|) {
+	@output = set_timestamps();
+}
+
+if (@output) {
+	print_timestamps(@output);
+} else {
+	print_usage();
+}
+
+sub read_timestamps {
+	my ($mode) = @_;
+	my @times = ();
+
+	opendir my $dir, '.'
+		or return ();
+
+	for (readdir $dir) {
+		if (-f $_ && $_ ne TIMES_FILE) {
+			my @stat = stat;
+			my $time = $stat[$mode];
+			push @times, "$_\t$time\n";
+		}
+	}
+
+	closedir $dir;
+
+	return @times;
+}
+
+sub read_ctimes {
+	return read_timestamps(10);
+}
+
+sub read_mtimes {
+	return read_timestamps(9);
+}
+
+sub get_timestamps {
+	# will not write a new file if one already exists;
+	# prevents you from accidentally rewriting the index when you really
+	# want to restore it
+	return if (-e TIMES_FILE);
+
+	my @times = read_mtimes();
+
+	open my $handle, '>', TIMES_FILE
+		or return ();
+	print $handle @times;
+	close $handle;
+
+	return @times;
+}
+
+sub set_timestamps {
+	open my $handle, '<',  TIMES_FILE
+		or return ();
+	my @times = <$handle>;
+	close $handle;
+
+	for (@times) {
+		my ($file, $time) = split "\t";
+		utime time, $time, $file;
+	}
+
+	unlink TIMES_FILE;
+
+	return @times;
+}
+
+sub print_timestamps {
+	my $max = 0;
+
+	# gets length of longest file name
+	for (@_) {
+		my $length = length;
+		$max = $length if ($length > $max);
+	}
+
+	# formats table based on longest file name
+	for (@_) {
+		my ($file, $time) = split "\t";
+		my $length = length $file;
+
+		print $file, ' ' x ($max - $length - 10), $time;
+	}
+}
+
+sub print_usage {
+print <<'END';
+Usage: filetime [-dgs] file
+  -d	displays timestamps for all files in the directory
+  -g	creates an index of timestamps
+  -s	sets file timestamps to those in the file and deletes index
+END
+}
